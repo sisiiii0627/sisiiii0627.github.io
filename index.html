@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Prediction</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        video {
+            max-width: 90%;
+            border-radius: 15px; /* Rounded corners */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        button {
+            margin: 20px 0;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+        }
+        p {
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Quick Draw!</h2>
+
+<video id="video" autoplay playsinline></video>
+<!--<button onclick="switchCamera()">Switch Camera</button>-->
+<p id="result"></p>
+
+<script>
+    ////////////////////////////////
+    ////////    SPECIFY PARAMETERS
+    ////////////////////////////////
+    const PROCESSING_SPEED = 2000;
+    const CLASSES = ["bird", "power outlet"];
+    const MODEL_FOLDER = 'model/model.json';
+    // const mode = 'environment' // back camera
+    const camera_mode = 'user' // front camera
+
+    let currentStream;
+
+    ////////////////////////////////
+    ////////    USE THIS FUNCTION FOR INTERACTIONS
+    ////////////////////////////////
+    function interaction(predictedClass, classScores) {
+        console.log(classScores);
+        document.getElementById("result").innerHTML = `Prediction: ${predictedClass}, Confidence: ${classScores[0]}`;
+        document.body.style.backgroundColor = predictedClass === "bird" ? "red" : "white";
+    }
+
+    ////////////////////////////////
+    ////////    VIDEO CAPTURE AND PREDICTION LOGIC
+    ////////////////////////////////
+    async function startVideo(facingMode = 'user') {
+        // Stop any existing video tracks to free up the camera
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => {
+                track.stop();
+            });
+        }
+
+        try {
+            // Request access to the camera with the specified facing mode
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode }
+            });
+
+            const videoElement = document.getElementById('video');
+            videoElement.srcObject = stream;
+            currentStream = stream;
+
+            // Return a promise that resolves when the video is ready to play
+            return new Promise(resolve => {
+                videoElement.onloadedmetadata = () => {
+                    resolve(videoElement);
+                };
+            });
+        } catch (err) {
+            console.error('Error accessing the camera:', err);
+        }
+    }
+
+
+    async function startPredicting() {
+        const model = await tf.loadGraphModel(MODEL_FOLDER);
+        setInterval(async () => {
+            const example = tf.browser.fromPixels(video).cast('float32');
+            const prediction = await model.predict(example.expandDims());
+            const classScores = await prediction.data();
+            const maxScoreId = classScores.indexOf(Math.max(...classScores));
+            const predictedClass = CLASSES[maxScoreId];
+
+            interaction(predictedClass, classScores);
+        }, PROCESSING_SPEED);
+    }
+
+    // function switchCamera() {
+    //     if (currentStream) {
+    //         currentStream.getTracks().forEach(track => track.stop());
+    //     }
+    //     startVideo('user');
+    // }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        startVideo(camera_mode);
+        startPredicting();
+    });
+</script>
+</body>
+</html>
